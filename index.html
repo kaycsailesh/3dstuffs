@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>
+    <script src="xeogl.js"></script>
+    <script src="js/models/glTFModel.js"></script>
+    <script src="js/skyboxes/skybox.js"></script>
+    <script src="js/geometry/vectorTextGeometry.js"></script>
+    <script src="js/utils/materialGallery.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+        }
+
+        h1 {
+            text-transform: uppercase;
+            font-weight: 100;
+            font-size: 24px;
+            margin-bottom: 40px;
+        }
+        #container {
+            height: 700px; 
+            /* width: 700px; */
+            flex-grow: 1;
+            margin: auto;
+            border: 5px solid rgb(181, 126, 226);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .nav {
+            width: 100%;
+        }
+        .content {
+            max-width: 1200px;
+            margin: auto;
+        }
+        .main {
+            max-width: 1200px;
+            margin: auto;
+        }
+        .body-content {
+            display: flex;
+        }
+
+        .selection{
+            display: flex;
+            justify-content: space-evenly;
+            flex-wrap: wrap;
+            width: 220px;
+            margin-right: 10px;
+        }
+
+        .selection div{
+            width: 100px;
+            height: 100px;
+            border-radius: 7px;
+            margin-bottom: 10px;
+            cursor: pointer;
+        }
+
+        .selection div:hover {
+            opacity: 0.8;
+        }
+
+        .blue{
+            background: rgb(114,155,199)
+        }
+
+        .green {
+            background: rgb(164,179,172)
+        }
+
+        .grey {
+            background: rgb(162,169,173)
+        }
+
+        .white {
+            background: rgb(233, 234, 229)
+        }
+        .red {
+            background: rgb(214, 61, 74)
+        }
+        .yellow {
+            background: rgb(226, 224, 123)
+        }
+    </style>
+</head>
+<body>
+<div class="nav">
+    <div class="content">
+        <h1>Color Selection</h1>
+    </div>
+</div>
+<div class="main">
+    <div class="body-content">
+    <div class="colors">
+        <h3>Pick Colors</h3>
+        <div class="selection">
+        <div class="blue" onclick="changeColor('blue')"></div>
+        <div class="green" onclick="changeColor('green')"></div>
+        <div class="grey" onclick="changeColor('grey')"></div>
+        <div class="white" onclick="changeColor('white')"></div>
+        <div class="red" onclick="changeColor('red')"></div>
+        <div class="yellow" onclick="changeColor('yellow')"></div>
+        </div>
+    </div>
+
+    <div class="model">
+        <h3>Select a building section you wish to change color of</h3>
+        <div id="container"></div>
+    </div>
+</div>
+</div>
+
+<script>
+    var meshes = [];
+    var colors = [];
+    var activeColor = [];
+    var activeMesh;
+    var paints = [
+        {
+          name: 'blue',
+          color: [114,155,199]
+        },
+        {
+          name: 'green',
+          color: [164,179,172]
+        },
+        {
+          name: 'grey',
+          color: [162,169,173]
+        },
+        {
+          name: 'white',
+          color: [233, 234, 229]
+        },
+        {
+          name: 'red',
+          color: [214, 61, 74]
+        },
+        {
+            name: 'yellow',
+            color: [226, 224, 123]
+        }
+      ]
+
+    var model = new xeogl.GLTFModel({
+        id: "home",
+        // src: "3d/adm/adm.gltf",
+        src: "3d/adm/adm1.gltf",
+        smoothNormals: true,
+        alphaMode: "overlay",
+    });
+
+    var scene = model.scene;
+    scene.clearLights();
+
+    new xeogl.AmbientLight({color: [1, 1, 1.0], intensity: 1});
+
+    new xeogl.DirLight({
+        id: "keyLight",
+        dir: [0.8, -0.6, -0.8],
+        color: [1.0, 1, 1],
+        intensity: 0.8,
+        space: "world"
+    });
+
+    new xeogl.DirLight({
+        id: "fillLight",
+        dir: [-0.8, -0.4, -0.4],
+        color: [1, 1.0, 1],
+        intensity: 0.3,
+        space: "world"
+    });
+
+    new xeogl.DirLight({
+        id: "rimLight",
+        dir: [0.2, -0.8, 0.8],
+        color: [1, 1, 1],
+        intensity: 0.3,
+        space: "world"
+    });
+
+    scene.transparent = true;
+    var canvas = scene.canvas;
+    var container = document.getElementById("container");
+    container.appendChild(canvas.canvas);
+
+    var camera = scene.camera;
+    var input = scene.input;
+
+    var skybox = new xeogl.Skybox({
+        src: "textures/skybox/cloudySkyBox.jpg",
+        size: 100 // Default
+    });
+
+    var cameraControl = new xeogl.CameraControl({
+        // panToPointer: true,
+        // pivoting: true
+    });
+
+    var cameraFlight = new xeogl.CameraFlightAnimation();
+
+    model.on("loaded", function(geometry) {
+        model.edges = true;
+        console.log(model);
+        for (let meshId in model.meshes) {
+            if (model.meshes[meshId]._material.baseColorMap) {
+                model.meshes[meshId].material.metallic = 1;
+                model.meshes[meshId].material.roughness = 1;
+                // model.meshes[meshId].material.ambient = [1, 0.7, 0.7];
+                // model.meshes[meshId].material.baseColor = [0,0,0]
+                // model.meshes[meshId].material.baseColorMap.src = "3d/adm/adm_images/roof.jpg"
+            } else {
+                // model.meshes[meshId].material.baseColor = [1,0,1,1]
+            }
+        }
+        // console.log(scene.getAABB("home"));
+        cameraFlight.flyTo(model);
+        // camera.pitch(-25);
+    });
+
+
+    var lastEntity = null;
+    var lastColorize = null;
+
+    cameraControl.on("hoverEnter", function (hit) {
+        document.body.style.cursor = "pointer";
+
+        if (hit) {
+            if (!lastEntity || hit.mesh.id !== lastEntity.id) {
+                if (lastEntity) {
+                    lastEntity.colorize = lastColorize;
+                }
+
+                lastEntity = hit.mesh;
+                lastColorize = hit.mesh.colorize.slice();
+
+                hit.mesh.colorize = [0.0, 1.0, 0.0, 1.0];
+            }
+        } else {
+            if (lastEntity) {
+                lastEntity.colorize = lastColorize;
+                lastEntity = null;
+            }
+        }
+    });
+
+    cameraControl.on("hoverOut", function (hit) {
+        document.body.style.cursor = "default";
+        // hit.mesh.opacity = 1;
+        if (lastEntity) {
+                lastEntity.colorize = lastColorize;
+                lastEntity = null;
+            }
+    });
+
+
+
+    // input.on("mousemove", function (coords) {
+
+    //     var hit = scene.pick({
+    //         canvasPos: coords
+    //     });
+
+    //     if (hit) {
+
+    //         if (!lastEntity || hit.mesh.id !== lastEntity.id) {
+
+    //             if (lastEntity) {
+    //                 lastEntity.colorize = lastColorize;
+    //             }
+
+    //             lastEntity = hit.mesh;
+    //             lastColorize = hit.mesh.colorize.slice();
+
+    //             hit.mesh.colorize = [0.0, 1.0, 0.0, 1.0];
+    //         }
+    //     } else {
+
+    //         if (lastEntity) {
+    //             lastEntity.colorize = lastColorize;
+    //             lastEntity = null;
+    //         }
+    //     }
+    // });
+
+    cameraControl.on("picked", function (hit) {
+        var mesh = hit.mesh;
+        // console.log(mesh.material);
+        activeMesh = mesh;
+        // if (input.keyDown[input.KEY_SHIFT]) {
+        //     mesh.selected = !mesh.selected;
+        //     mesh.highlighted = !mesh.selected;
+        // } else {
+        //     cameraFlight.flyTo(mesh);
+        // }
+    });
+
+    cameraControl.on("pickedNothing", function (hit) {
+        cameraFlight.flyTo(model);
+    });
+
+    cameraControl.on("pitch", function () {
+        console.log('pitching');
+    })
+
+    function changeColor(paint) {
+        if (!activeMesh) {
+            alert("select a building section first")
+            return;
+        }
+      activeColor = paints.find(item => item.name === paint);
+      const color = activeColor.color;
+      const r = color[0] / 256;
+      const g = color[1] / 256;
+      const b = color[2] / 256;
+      activeMesh.material.baseColor = [r, g, b, 1];
+    //   colors.forEach(mesh => {
+    //     mesh.material.baseColor = [r, g, b, 1]
+    //   })
+    }
+
+</script>
+</body>
+</html>
